@@ -12,6 +12,15 @@ PLANTNET_API_KEY = os.getenv("PLANTNET_API_KEY")
 PLANTNET_URL = f"https://my-api.plantnet.org/v2/identify/all?api-key={PLANTNET_API_KEY}"
 
 
+def clean_scientific_name(name: str):
+    import re
+    cleaned = re.sub(r"\(.*?\)", "", name)
+    parts = cleaned.split()
+    filtered = [p for p in parts if len(p) > 2] 
+
+    return " ".join(filtered).strip()
+
+
 @predict_plant.route("/predict", methods=["POST"])
 def predict():
     if "image" not in request.files:
@@ -19,7 +28,6 @@ def predict():
 
     file = request.files["image"]
 
-    # Send image to PlantNet
     files = {
         "images": (file.filename, file.stream, file.content_type)
     }
@@ -31,27 +39,27 @@ def predict():
     except Exception as e:
         return jsonify({"error": f"PlantNet request failed: {str(e)}"}), 500
 
-    # Validate PlantNet response
     if "results" not in result or not result["results"]:
         return jsonify({"error": "No plant identified"}), 400
 
     top_result = result["results"][0]
     species = top_result["species"]
 
-    scientific_name = species["scientificName"]
+    original_scientific = species["scientificName"]
+    scientific_name = clean_scientific_name(original_scientific)
+
     common_name = species["commonNames"][0] if species["commonNames"] else "Unknown"
 
-    # Check DB for uses
     uses = get_use_from_db(scientific_name)
 
-    # If not in DB → get from Gemini & store
     if not uses:
         uses = get_use_from_gemini(scientific_name)
         if uses:
             store_use_to_db(scientific_name, uses)
 
     return jsonify({
-        "scientific_name": scientific_name,
+        "scientific_name": scientific_name,         
         "common_name": common_name,
+        "original_scientific": original_scientific, 
         "uses": uses or "Not available"
     })
