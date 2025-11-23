@@ -13,7 +13,6 @@ const Chatbot = () => {
     const text = input;
     setInput("");
 
-    // Add user msg instantly
     setMessages((prev) => [...prev, { sender: "user", text }]);
 
     setLoading(true);
